@@ -1,0 +1,247 @@
+import {
+  newSmart,
+  useRouter,
+  useUIComponents,
+  useTranslate,
+  useData,
+  use,
+} from "@bluelibs/x-ui";
+
+import { useEffect, useState, useMemo } from "react";
+import React, { Component } from 'react';
+
+import { TodoAntTableSmart } from "./TodoTableSmart";
+import { PlusOutlined, FilterOutlined } from "@ant-design/icons";
+import * as Ant from "antd";
+import { Routes } from "@bundles/UIAppBundle";
+import { features } from "../../config/features";
+import { TodoListFilters } from "./TodoListFilters";
+import { render } from "react-dom";
+import { TodoCollection } from "@bundles/UIAppBundle/collections";
+import { ObjectId } from "@bluelibs/ejson";
+
+export function TodoList2(props: { state1: { children: { tasks: { name: string; category: string; bgcolor: string; _id: ObjectId }[]; }; } }) {
+
+  console.log("the props ");
+  console.log(props.state1);
+
+
+  let [state1, setState1] = useState(props.state1);
+
+  state1 = props.state1;
+  const todocollection = use(TodoCollection);
+  let onDragOver = (ev) => {
+    ev.preventDefault();
+  }
+  let onDrop = (ev, cat) => {
+    let id = ev.dataTransfer.getData("id");
+
+    var tasks = state1.children.tasks.filter((task) => {
+      if (task.name == id) {
+        task.category = cat;
+
+        let updater;
+        (cat == "done") ? updater = true : updater = false;
+        (cat == "done") ? task.bgcolor = "#124BD1" : task.bgcolor = "#53A753";
+
+        todocollection.updateOne(task._id, { $set: { done: updater } })
+          .then(({ _id }) => {
+
+          })
+          .catch((err) => {
+
+          });
+      }
+      return task;
+    });
+    setState1({
+      ...state1,
+      ...tasks,
+
+    });
+
+
+  }
+  let tasks = {
+    todo: [],
+    done: []
+  }
+  state1.children.tasks.forEach((t) => {
+    console.log("update" + t)
+    tasks[t.category].push(
+      <div className="page-todo-lists2"   >
+
+        <Ant.Card style={{ borderTopColor: t.bgcolor }} size="small" key={t.name} onDragStart={(e) => e.dataTransfer.setData("id", t.name)} draggable bordered={true}>
+          {t.name}
+        </Ant.Card>
+      </div>
+
+    );
+  })
+
+
+
+  return (
+
+    <div className="page-todo-lists"   >
+
+      <Ant.Row>
+        <Ant.Col span={12} >
+          <div className="page-todo-lists"
+            onDragOver={(e) => onDragOver(e)}
+            onDrop={(e) => { onDrop(e, "todo") }}>
+            <Ant.List className="page-todo-lists"
+              header={<div className="page-todo-lists" >Todo</div>}
+              footer={<div className="page-todo-lists" >Todo Lists</div>}
+              bordered
+              dataSource={tasks.todo}
+              renderItem={item => (
+                <Ant.List.Item  >
+                  <Ant.Typography.Text mark></Ant.Typography.Text> {item}
+                </Ant.List.Item>
+              )}
+            />
+          </div></Ant.Col>
+        <Ant.Col span={12}>   <div className="page-todo-lists"
+          onDrop={(e) => onDrop(e, "done")}
+          onDragOver={(ev) => onDragOver(ev)}>
+          <Ant.List
+            size="large"
+            header={<div className="page-todo-lists">Done</div>}
+            footer={<div className="page-todo-lists" >done Lists</div>}
+            bordered
+            dataSource={tasks.done}
+            renderItem={item => (
+              <Ant.List.Item>
+                <Ant.Typography.Text mark></Ant.Typography.Text> {item}
+              </Ant.List.Item>
+            )}
+          />
+        </div></Ant.Col>
+      </Ant.Row>
+
+    </div>
+  )
+
+
+
+
+
+
+
+
+
+
+
+}
+export function TodoList() {
+  const UIComponents = useUIComponents();
+  const router = useRouter();
+  const t = useTranslate();
+  const [api, Provider] = newSmart(TodoAntTableSmart);
+  console.log(api.getSortMap())
+
+  const [filtersOpened, setFiltersOpened] = useState(false);
+
+
+  const { data: st, error, isLoading } = useData(TodoCollection, {
+    filters: {
+
+    }
+  }, {
+    _id: 1,
+    done: 1,
+    titel: 1,
+  })
+
+  let state1 = {
+    children: {
+      tasks: []
+    }
+  }
+
+  if (st) {
+    st.forEach((key) => {
+      if (key.done == true) {
+        state1.children.tasks.push({ name: key.titel, category: "done", bgcolor: "#124BD1", _id: key._id })
+      } else {
+        state1.children.tasks.push({ name: key.titel, category: "todo", bgcolor: "#53A753", _id: key._id })
+      }
+
+
+    })
+  }
+  console.log("the st")
+  console.log(st)
+  console.log("the state")
+  console.log(state1)
+  const onFiltersUpdate = useMemo(() => {
+    return (filters) => {
+      api.setFlexibleFilters(filters);
+    };
+  }, []);
+
+  return (
+    <div className="page-todo-list">
+      <UIComponents.AdminLayout>
+        <Ant.PageHeader
+          title={t("management.todo.list.header")}
+          extra={[
+            features.create ? (
+              <Ant.Button
+                key="1"
+                onClick={() => router.go(Routes.TODO_CREATE)}
+                icon={<PlusOutlined />}
+              >
+                {t("management.todo.list.create_btn")}
+              </Ant.Button>
+            ) : null,
+            <Ant.Button
+              key="2"
+              onClick={() => setFiltersOpened(!filtersOpened)}
+              icon={<FilterOutlined />}
+            >
+              {t("generics.list_filters")}
+            </Ant.Button>,
+          ]}
+        />
+
+        {api.state.isError && (
+          <Ant.Alert type="error" message={t("generics.error_message")} />
+        )}
+
+        <Ant.Layout.Content>
+          <Provider>
+
+            {filtersOpened && <TodoListFilters onUpdate={onFiltersUpdate} />}
+            <TodoList2 state1={state1}></TodoList2>
+            <Ant.PageHeader
+              title="Default todo list"
+              extra={[
+                features.create ? (
+                  <Ant.Button
+                    key="1"
+                    onClick={() => router.go(Routes.TODO_CREATE)}
+                    icon={<PlusOutlined />}
+                  >
+                    {t("management.todo.list.create_btn")}
+                  </Ant.Button>
+                ) : null,
+                <Ant.Button
+                  key="2"
+                  onClick={() => setFiltersOpened(!filtersOpened)}
+                  icon={<FilterOutlined />}
+                >
+                  {t("generics.list_filters")}
+                </Ant.Button>,
+              ]}
+            />
+            <Ant.Table {...api.getTableProps()} />
+
+          </Provider>
+        </Ant.Layout.Content>
+      </UIComponents.AdminLayout>
+    </div>
+  );
+}
+
